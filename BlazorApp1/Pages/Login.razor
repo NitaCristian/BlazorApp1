@@ -1,84 +1,77 @@
 ﻿@page "/login"
 
 @inject AuthenticationService AuthService
-@inject IConfiguration _configuration
+@inject NavigationManager NavManager
 
 <h3>Login</h3>
 
-@if (AuthService.CurrentUser.Identity is not null && AuthService.CurrentUser.Identity.IsAuthenticated)
+@if (showAuthenticationError)
 {
-    <p>You are logged in as: @AuthService.CurrentUser.Identity.Name</p>
-    <button class="btn btn-primary" @onclick="HandleLogout">Logout</button>
+    <div class="alert alert-danger" role="alert">
+        <p>@authenticationErrorText</p>
+    </div>
 }
-else
-{
-    <EditForm Model="model" OnValidSubmit="HandleLogin">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+<AuthorizeView Context="AuthContext">
+    <Authorized>
+        <p>You are logged in as: @AuthContext.User.Identity.Name</p>
+        <button class="btn btn-primary" @onclick="HandleLogout">Logout</button>
+    </Authorized>
+    <NotAuthorized>
+        <EditForm Model="model" OnValidSubmit="HandleLogin" class="card card-body bg-light mt-5 form form-horizontal" Context="FormContext">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
 
-        <div class="form-group">
-            <label for="username">Username</label>
-            <InputText type="text" class="form-control" id="username" @bind-Value="model.Username" />
-        </div>
-        <div class="form-group">
-            <label for="password">Password</label>
-            <InputText type="password" class="form-control" id="password" @bind-Value="model.Password" />
-        </div>
+            <div class="form-group mb-5">
+                <label for="username" class="col-md-2 col-form-label">Username</label>
+                <div class="col-md-10">
+                    <InputText id="username" class="form-control" @bind-Value="model.Username"></InputText>
+                    <ValidationMessage For="@(() => model.Username)" />
+                </div>
+            </div>
 
-        <button type="submit">Log In</button>
-    </EditForm>
-}
+            <div class="form-group mt-5">
+                <label for="password" class="col-md-2 col-form-label">Password</label>
+                <div class="col-md-10">
+                    <InputText type="password" id="password" class="form-control" @bind-Value="model.Password"></InputText>
+                    <ValidationMessage For="@(() => model.Password)" />
+                </div>
+            </div>
+
+            <div class="">
+                <div class="col-md-12 text-right">
+                    <button type="submit" class="btn btn-success">Log In</button>
+                </div>
+            </div>
+        </EditForm>
+    </NotAuthorized>
+</AuthorizeView>
+
+
 
 @code {
     private UserDto model = new();
+    private bool showAuthenticationError = false;
+    private string authenticationErrorText = "";
 
     private async Task HandleLogin()
     {
-        if (AuthenticateUser(model))
+        showAuthenticationError = false;
+
+        var result = await AuthService.Login(model);
+
+        if (result)
         {
-            var token = GenerateJwtToken(model.Username);
-            await AuthService.SignInUser(token);
+            NavManager.NavigateTo("/");
         }
         else
         {
-            // Authentication failed
+            authenticationErrorText = "There was an error when trying to log in";
+            showAuthenticationError = true;
         }
     }
 
     private async Task HandleLogout()
     {
         await AuthService.SignOutUser();
-    }
-
-    private bool AuthenticateUser(UserDto model)
-    {
-        if (model.Username == "admin" && model.Password == "password")
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    private string GenerateJwtToken(string username)
-    {
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.Name, username),
-            new Claim(ClaimTypes.Role, "Admin")
-    };
-
-        var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
-        var token = new JwtSecurityToken(
-            issuer: "your-issuer",
-            audience: "your-audience",
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(1),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
