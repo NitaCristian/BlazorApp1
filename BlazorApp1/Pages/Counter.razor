@@ -1,0 +1,30 @@
+﻿@page "/counter"
+@inject ProtectedSessionStorage protectedSessionStorage
+
+<PageTitle>Counter</PageTitle>
+
+@if (currentCount.HasValue)
+{
+    <p>Current count: <strong>@currentCount</strong></p>
+    <button @onclick="IncrementCount">Increment</button>
+}
+else
+{
+    <p>Loading...</p>
+}
+
+@code {
+    private int? currentCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await protectedSessionStorage.GetAsync<int>("count");
+        currentCount = result.Success ? result.Value : 0;
+    }
+
+    private async void IncrementCount()
+    {
+        currentCount++;
+        await protectedSessionStorage.SetAsync("count", currentCount);
+    }
+}

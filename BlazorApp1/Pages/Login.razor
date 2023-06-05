@@ -1,0 +1,84 @@
+﻿@page "/login"
+
+@inject AuthenticationService AuthService
+@inject IConfiguration _configuration
+
+<h3>Login</h3>
+
+@if (AuthService.CurrentUser.Identity is not null && AuthService.CurrentUser.Identity.IsAuthenticated)
+{
+    <p>You are logged in as: @AuthService.CurrentUser.Identity.Name</p>
+    <button class="btn btn-primary" @onclick="HandleLogout">Logout</button>
+}
+else
+{
+    <EditForm Model="model" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label for="username">Username</label>
+            <InputText type="text" class="form-control" id="username" @bind-Value="model.Username" />
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <InputText type="password" class="form-control" id="password" @bind-Value="model.Password" />
+        </div>
+
+        <button type="submit">Log In</button>
+    </EditForm>
+}
+
+@code {
+    private UserDto model = new();
+
+    private async Task HandleLogin()
+    {
+        if (AuthenticateUser(model))
+        {
+            var token = GenerateJwtToken(model.Username);
+            await AuthService.SignInUser(token);
+        }
+        else
+        {
+            // Authentication failed
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.SignOutUser();
+    }
+
+    private bool AuthenticateUser(UserDto model)
+    {
+        if (model.Username == "admin" && model.Password == "password")
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    private string GenerateJwtToken(string username)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, username),
+            new Claim(ClaimTypes.Role, "Admin")
+    };
+
+        var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(_configuration.GetSection("AppSettings:Token").Value));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+        var token = new JwtSecurityToken(
+            issuer: "your-issuer",
+            audience: "your-audience",
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(1),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
